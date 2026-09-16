@@ -106,7 +106,8 @@ class TestPerformanceMetrics:
                 def entity_based_analyze(*args, **kwargs):
                     time.sleep(count * 0.001)  # 1ms per entity
                     return [
-                        RecognizerResult("PERSON", i, i + 4, 0.85) for i in range(count)
+                        RecognizerResult("PERSON", i * 5, i * 5 + 4, 0.85)
+                        for i in range(count)
                     ]
 
                 mock_analyzer.analyze.side_effect = entity_based_analyze

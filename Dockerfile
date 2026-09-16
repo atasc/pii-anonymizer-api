@@ -21,6 +21,13 @@ RUN python -m spacy download en_core_web_lg --quiet || \
     (echo "Failed to download en_core_web_lg, trying alternative..." && \
      pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.6.0/en_core_web_lg-3.6.0-py3-none-any.whl)
 
+# Extra spaCy models, comma separated (e.g. it_core_news_lg). Each one must also
+# be mapped to its language in SPACY_MODELS at runtime (e.g. it:it_core_news_lg).
+ARG SPACY_EXTRA_MODELS=""
+RUN for model in $(echo "$SPACY_EXTRA_MODELS" | tr ',' ' '); do \
+        python -m spacy download "$model" || exit 1; \
+    done
+
 # Production stage
 FROM python:3.11-slim
 

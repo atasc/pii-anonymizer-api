@@ -148,7 +148,9 @@ class TestAnonymizeEndpoint:
 
             # Verify analyzer was called with correct parameters
             mock_analyzer.analyze.assert_called_once_with(
-                text="John Doe email is john@example.com", language="en"
+                text="John Doe email is john@example.com",
+                language="en",
+                score_threshold=None,
             )
 
     def test_anonymize_different_strategies(self, sample_analyzer_results):
@@ -187,7 +189,7 @@ class TestAnonymizeEndpoint:
         for lang in languages:
             with patch("main.analyzer_engine") as mock_analyzer, patch(
                 "main.anonymizer_engine"
-            ) as mock_anonymizer:
+            ) as mock_anonymizer, patch("main.Config.ENABLED_LANGUAGES", languages):
 
                 mock_analyzer.analyze.return_value = sample_analyzer_results
                 mock_anonymizer.anonymize.return_value = sample_anonymize_result
@@ -198,7 +200,7 @@ class TestAnonymizeEndpoint:
 
                 assert response.status_code == 200
                 mock_analyzer.analyze.assert_called_with(
-                    text="Test text", language=lang
+                    text="Test text", language=lang, score_threshold=None
                 )
 
     def test_anonymize_invalid_language(self):

@@ -268,9 +268,11 @@ class TestMultiLanguageSupport:
             mock_result.text = "Mi nombre es <PERSONA> y mi correo es <EMAIL>"
             mock_anonymizer.anonymize.return_value = mock_result
 
-            response = self.client.post(
-                "/anonymize", json={"text": spanish_text, "language": "es"}
-            )
+            with patch("main.Config.ENABLED_LANGUAGES", ["en", "es"]):
+                response = self.client.post(
+                    "/anonymize",
+                    json={"text": spanish_text, "language": "es"},
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -295,9 +297,11 @@ class TestMultiLanguageSupport:
             )
             mock_anonymizer.anonymize.return_value = mock_result
 
-            response = self.client.post(
-                "/anonymize", json={"text": french_text, "language": "fr"}
-            )
+            with patch("main.Config.ENABLED_LANGUAGES", ["en", "fr"]):
+                response = self.client.post(
+                    "/anonymize",
+                    json={"text": french_text, "language": "fr"},
+                )
 
             assert response.status_code == 200
             data = response.json()

@@ -73,6 +73,9 @@ A production-ready FastAPI service for anonymizing Personally Identifiable Infor
 - **Financial**: CREDIT_CARD, IBAN_CODE
 - **Government**: US_SSN, US_PASSPORT, US_DRIVER_LICENSE
 - **Technical**: IP_ADDRESS
+- **Italian** (`"language": "it"`, requires the `it_core_news_lg` model): IT_FISCAL_CODE (codice fiscale), IT_VAT_CODE (partita IVA), IT_IDENTITY_CARD, IT_DRIVER_LICENSE, IT_PASSPORT, IT_POSTAL_CODE (CAP). Italian street addresses ("Via Garibaldi 12") are detected as LOCATION, house number included.
+
+`GET /info` lists, under `supported_entities_by_language`, the entities the loaded recognizers can actually detect for each enabled language.
 
 ## Quick Start (30 seconds)
 
@@ -157,6 +160,10 @@ DEFAULT_LANGUAGE=en
 LOG_LEVEL=INFO
 MAX_TEXT_LENGTH=10000
 SUPPORTED_LANGUAGES=en,es,fr,de,it
+# spaCy model per language ("language:model" pairs)
+SPACY_MODELS=en:en_core_web_lg
+# Detect organizations (ignored by default: many false positives)
+DETECT_ORGANIZATIONS=false
 
 # CORS Configuration
 CORS_ORIGINS=*
@@ -250,7 +257,7 @@ curl -X POST "http://localhost:8000/anonymize" \
      }'
 ```
 
-**4. Multi-language Support** (Spanish example)
+**4. Multi-language Support** (Spanish example, requires `es` in `SPACY_MODELS`)
 ```bash
 curl -X POST "http://localhost:8000/anonymize" \
      -H "Content-Type: application/json" \
@@ -262,6 +269,20 @@ curl -X POST "http://localhost:8000/anonymize" \
        }
      }'
 ```
+
+**5. Italian Text** (requires `it` in `SPACY_MODELS`, see [Enabling Additional Languages](#enabling-additional-languages))
+```bash
+curl -X POST "http://localhost:8000/anonymize" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "text": "Il sig. Mario Rossi, codice fiscale RSSMRA80C12F205X, residente in Via Garibaldi 12, 20121 Milano. Email mario.rossi@example.it, cell. +39 347 123 4567. P.IVA 07643520567.",
+       "language": "it"
+     }'
+```
+
+Response text: `Il sig. <PERSON>, codice fiscale <IT_FISCAL_CODE>, residente in <LOCATION>, <IT_POSTAL_CODE> <LOCATION>. Email <EMAIL_ADDRESS>, cell. <PHONE_NUMBER>. P.IVA <IT_VAT_CODE>.`
+
+**Overlapping detections**: when several recognizers match the same text, only one result is kept, and `detected_entities` lists exactly the results used for the anonymized text. Pattern-based results (fiscal codes, IBAN, email, phone numbers, ...) win over spaCy NER results even with a lower score; otherwise the higher score wins, then the longer span.
 
 ### Anonymization Strategies Explained
 
@@ -282,6 +303,27 @@ curl -X POST "http://localhost:8000/anonymize" \
 | French | `fr` | "Je m'appelle Pierre Dupont" |
 | German | `de` | "Mein Name ist Hans Mueller" |
 | Italian | `it` | "Il mio nome è Marco Rossi" |
+
+A language is accepted only when it is listed in `SUPPORTED_LANGUAGES` **and** has a model in `SPACY_MODELS`; the others are disabled at startup with a warning, and requests using them get a 422. `GET /info` shows the enabled languages.
+
+### Enabling Additional Languages
+
+Each language needs a spaCy model, installed and mapped in `SPACY_MODELS`. For Italian:
+
+```bash
+# Docker: install the extra model at build time (comma-separated list)
+docker build --build-arg SPACY_EXTRA_MODELS=it_core_news_lg -t pii-anonymizer-api .
+docker run -p 8000:8000 \
+  -e SUPPORTED_LANGUAGES=en,it \
+  -e SPACY_MODELS=en:en_core_web_lg,it:it_core_news_lg \
+  pii-anonymizer-api
+
+# Local setup
+python -m spacy download it_core_news_lg
+SUPPORTED_LANGUAGES=en,it SPACY_MODELS=en:en_core_web_lg,it:it_core_news_lg make dev
+```
+
+Large spaCy models use roughly 500 MB-1 GB of RAM each, so only load the languages you need.
 
 ## Complete API Reference
 
@@ -311,7 +353,8 @@ curl -X POST "http://localhost:8000/anonymize" \
     "mask_char": "single character (for mask strategy, default: '*')",
     "chars_to_mask": "integer >= 1 (for mask strategy, default: mask the whole entity)",
     "mask_from_end": "boolean (for mask strategy, mask the tail instead of the head, default: false)",
-    "hash_type": "sha256|sha512 (for hash strategy, default: 'sha256')"
+    "hash_type": "sha256|sha512 (for hash strategy, default: 'sha256')",
+    "score_threshold": "float between 0 and 1 (optional, ignore detections with a lower score, default: no filtering)"
   }
 }
 ```
@@ -364,6 +407,7 @@ pytest -m "performance"    # Performance tests only
 - `tests/test_integration.py` - Real-world scenario tests
 - `tests/test_config.py` - Configuration and validation tests
 - `tests/test_performance.py` - Performance and load tests
+- `tests/test_italian.py` - Italian support: overlap resolution, Italian recognizers, `SPACY_MODELS` parsing. Tests marked `italian_model` load `it_core_news_lg` and are skipped when it is not installed
 - `tests/conftest.py` - Shared fixtures and utilities
 
 ## Monitoring and Metrics
