@@ -110,6 +110,12 @@ class TestEnums:
             "US_SSN",
             "US_PASSPORT",
             "US_DRIVER_LICENSE",
+            "IT_FISCAL_CODE",
+            "IT_VAT_CODE",
+            "IT_IDENTITY_CARD",
+            "IT_DRIVER_LICENSE",
+            "IT_PASSPORT",
+            "IT_POSTAL_CODE",
         ]
 
         assert len(entities) == len(expected_entities)
@@ -270,7 +276,7 @@ class TestConfigurationIntegration:
         client = TestClient(app)
 
         # Test with supported language
-        for lang in Config.SUPPORTED_LANGUAGES:
+        for lang in Config.ENABLED_LANGUAGES:
             response = client.post(
                 "/anonymize", json={"text": "Test text", "language": lang}
             )

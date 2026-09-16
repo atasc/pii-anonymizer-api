@@ -259,6 +259,15 @@ def temp_file():
         os.unlink(path)
 
 
+def pytest_configure(config):
+    # pytest.ini uses a [tool:pytest] header, which pytest ignores, so its
+    # markers are not registered: register the Italian model marker here.
+    config.addinivalue_line(
+        "markers",
+        "italian_model: marks tests that load the it_core_news_lg spaCy model",
+    )
+
+
 # Markers for test categorization
 pytest.mark.unit = pytest.mark.unit
 pytest.mark.integration = pytest.mark.integration
