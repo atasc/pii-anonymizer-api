@@ -1,0 +1,1009 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PII Anonymizer Bench</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f0f2f5; --text: #1b1f24; --muted: #5d6673;
+  --border: #d9dee5; --accent: #2f6fed; --ok: #1f8a4c; --warn: #b7791f; --err: #c9362f;
+  --a: #2f6fed; --b: #d9480f; --mark: #fff3bf; --shadow: 0 1px 2px rgba(0,0,0,.06);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --panel: #171b21; --panel-2: #1f252d; --text: #e6e9ee; --muted: #98a2b0;
+    --border: #2c343e; --accent: #6b9bff; --ok: #4cc47f; --warn: #e0a84a; --err: #ff6b62;
+    --a: #6b9bff; --b: #ff8a4c; --mark: #4a3f14; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --panel: #171b21; --panel-2: #1f252d; --text: #e6e9ee; --muted: #98a2b0;
+  --border: #2c343e; --accent: #6b9bff; --ok: #4cc47f; --warn: #e0a84a; --err: #ff6b62;
+  --a: #6b9bff; --b: #ff8a4c; --mark: #4a3f14; --shadow: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+h3 { font-size: 14px; margin: 0 0 8px; }
+.sub { color: var(--muted); margin: 0 0 18px; }
+section.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+input, select, textarea, button { font: inherit; color: var(--text); }
+input[type=text], input[type=number], input[type=url], select, textarea {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; min-width: 0;
+}
+textarea { width: 100%; resize: vertical; font-family: var(--mono); font-size: 13px; }
+button { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.danger { background: var(--err); border-color: var(--err); color: #fff; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.machine { border-left: 4px solid var(--c); padding-left: 12px; }
+.machine .head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.ok { background: var(--ok); } .dot.err { background: var(--err); } .dot.busy { background: var(--warn); }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; font-size: 12px; margin-top: 8px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: var(--mono); word-break: break-all; }
+.tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+.tabs button[aria-selected=true] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.drop { border: 2px dashed var(--border); border-radius: 8px; padding: 22px; text-align: center; color: var(--muted); cursor: pointer; }
+.drop.over { border-color: var(--accent); color: var(--accent); }
+details { margin-top: 10px; }
+summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.checks { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; font-family: var(--mono); }
+.muted { color: var(--muted); font-size: 12px; }
+.progress { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-top: 12px; }
+.progress > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 8px 0 12px; }
+.tile { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
+.tile .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.tile .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.out { white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 12.5px; background: var(--panel-2); border-radius: 6px; padding: 10px; max-height: 320px; overflow: auto; }
+.out mark { background: var(--mark); color: inherit; border-radius: 2px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+td.win { color: var(--ok); font-weight: 600; }
+.tablewrap { overflow-x: auto; }
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+@media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+.chart { background: var(--panel-2); border-radius: 8px; padding: 10px; }
+.chart canvas { width: 100%; height: 220px; display: block; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.verdict { font-size: 15px; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); margin-bottom: 12px; }
+.err { color: var(--err); }
+.hidden { display: none !important; }
+.theme-toggle { float: right; }
+</style>
+</head>
+<body>
+<main>
+  <button class="theme-toggle" id="themeBtn" title="Tema chiaro/scuro">◐</button>
+  <h1>PII Anonymizer — test e confronto prestazioni</h1>
+  <p class="sub">Invia lo stesso testo o file alle due istanze e confronta latenza, tempo di elaborazione lato server, throughput e uso di risorse.</p>
+
+  <!-- Machines -->
+  <section class="panel">
+    <h2>Istanze</h2>
+    <div class="grid2" id="machines"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="checkBtn">Verifica stato</button>
+      <button id="rttBtn">Misura RTT di rete (20× /health)</button>
+      <span class="muted" id="rttOut"></span>
+    </div>
+  </section>
+
+  <!-- Input -->
+  <section class="panel">
+    <h2>Input</h2>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="text">Testo</button>
+      <button role="tab" aria-selected="false" data-tab="file">File</button>
+    </div>
+    <div id="tab-text">
+      <textarea id="text" rows="8" placeholder="Incolla qui il testo da anonimizzare…"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button data-sample="it">Esempio IT</button>
+        <button data-sample="en">Esempio EN</button>
+        <label class="f">Ripeti fino a (caratteri)
+          <input type="number" id="growTo" value="5000" min="100" step="500" style="width:120px">
+        </label>
+        <button id="growBtn">Espandi testo</button>
+        <span class="muted" id="textLen"></span>
+      </div>
+    </div>
+    <div id="tab-file" class="hidden">
+      <div class="drop" id="drop">Trascina qui un file oppure <u>clicca per sceglierlo</u><br>
+        <span class="muted">.txt .md .csv .json .log .xml .html — .pdf e .docx richiedono accesso a Internet (librerie da CDN)</span>
+      </div>
+      <input type="file" id="file" class="hidden" accept=".txt,.md,.csv,.json,.log,.xml,.html,.htm,.tsv,.yaml,.yml,.pdf,.docx,text/*">
+      <p class="muted" id="fileInfo"></p>
+    </div>
+
+    <div class="row" style="margin-top:14px">
+      <label class="f">Lingua
+        <select id="language"><option value="it">it</option><option value="en">en</option></select>
+      </label>
+      <label class="f">Strategia
+        <select id="strategy">
+          <option value="">predefinita (&lt;TIPO&gt;)</option>
+          <option value="replace">replace</option>
+          <option value="redact">redact</option>
+          <option value="mask">mask</option>
+          <option value="hash">hash</option>
+          <option value="encrypt">encrypt</option>
+        </select>
+      </label>
+      <label class="f">Testo sostitutivo
+        <input type="text" id="replacement" placeholder="<ANONYMIZED>" style="width:140px">
+      </label>
+      <label class="f">Soglia score (0–1)
+        <input type="number" id="threshold" min="0" max="1" step="0.05" placeholder="nessuna" style="width:100px">
+      </label>
+      <label class="f">Max caratteri per richiesta
+        <input type="number" id="chunkSize" min="100" step="500" style="width:120px">
+      </label>
+    </div>
+    <details>
+      <summary>Filtra tipi di entità (nessuna selezione = tutte)</summary>
+      <div class="checks" id="entities"></div>
+    </details>
+    <p class="muted" style="margin-bottom:0">Testi più lunghi del limite vengono divisi in blocchi (su a capo o spazi) e inviati come richieste separate; i risultati vengono ricomposti.</p>
+  </section>
+
+  <!-- Run -->
+  <section class="panel">
+    <h2>Esecuzione</h2>
+    <div class="row">
+      <button class="primary" id="singleBtn">Test singolo su entrambe</button>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div class="row">
+      <label class="f">Iterazioni misurate
+        <input type="number" id="iters" value="20" min="1" style="width:100px">
+      </label>
+      <label class="f">Warm-up (escluse)
+        <input type="number" id="warmup" value="3" min="0" style="width:100px">
+      </label>
+      <label class="f">Concorrenza
+        <input type="number" id="conc" value="1" min="1" max="64" style="width:90px">
+      </label>
+      <label class="f">Ordine
+        <select id="order">
+          <option value="alternate">alternato A/B (consigliato)</option>
+          <option value="parallel">in parallelo</option>
+          <option value="sequential">prima A, poi B</option>
+        </select>
+      </label>
+      <label class="f">Pausa tra richieste (ms)
+        <input type="number" id="pause" value="0" min="0" style="width:100px">
+      </label>
+      <label class="f" style="flex-direction:row;align-items:center;gap:6px;padding-bottom:6px">
+        <input type="checkbox" id="monitor" checked> monitora /metrics (1/s)
+      </label>
+      <button class="primary" id="benchBtn">Avvia benchmark</button>
+      <button class="danger hidden" id="stopBtn">Interrompi</button>
+    </div>
+    <div class="progress"><div id="prog"></div></div>
+    <p class="muted" id="progText"></p>
+  </section>
+
+  <!-- Single results -->
+  <section class="panel hidden" id="singlePanel">
+    <h2>Risultato test singolo</h2>
+    <div class="verdict" id="singleVerdict"></div>
+    <div class="grid2" id="singleResults"></div>
+  </section>
+
+  <!-- Benchmark results -->
+  <section class="panel hidden" id="benchPanel">
+    <h2>Risultati benchmark</h2>
+    <div class="verdict" id="benchVerdict"></div>
+    <div class="tablewrap"><table id="cmpTable"></table></div>
+    <div class="charts">
+      <div class="chart"><h3>Latenza client per richiesta (ms)</h3><div class="legend" data-legend></div><canvas id="chLatency"></canvas></div>
+      <div class="chart"><h3>Distribuzione latenza client (ms)</h3><div class="legend" data-legend></div><canvas id="chHist"></canvas></div>
+      <div class="chart"><h3>Percentili latenza client (ms)</h3><div class="legend" data-legend></div><canvas id="chPct"></canvas></div>
+      <div class="chart"><h3>CPU di sistema durante il test (%)</h3><div class="legend" data-legend></div><canvas id="chCpu"></canvas></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button id="csvBtn">Esporta CSV (richieste)</button>
+      <button id="jsonBtn">Esporta JSON (completo)</button>
+    </div>
+    <p class="muted">Latenza client = da invio richiesta a JSON ricevuto nel browser. Server = <code>processing_time_ms</code> restituito dall'API (analisi + anonimizzazione). Overhead = client − server (rete, serializzazione, coda). La CPU è <code>psutil.cpu_percent()</code> di sistema: in container riflette l'host.</p>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+// ---------- storage (best effort) ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("piibench." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("piibench." + k, JSON.stringify(v)); } catch {} },
+};
+
+// ---------- theme ----------
+$("#themeBtn").onclick = () => {
+  const cur = document.documentElement.dataset.theme
+    || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.dataset.theme = cur === "dark" ? "light" : "dark";
+  store.set("theme", document.documentElement.dataset.theme);
+  redrawCharts();
+};
+if (store.get("theme")) document.documentElement.dataset.theme = store.get("theme");
+
+// ---------- machines ----------
+const machines = store.get("machines", [
+  { id: "A", name: "10.85.10.234", url: "http://10.85.10.234:8010" },
+  { id: "B", name: "10.85.10.205", url: "http://10.85.10.205:8010" },
+]).map(m => ({ ...m, info: null, health: null }));
+
+const color = id => getComputedStyle(document.documentElement).getPropertyValue(id === "A" ? "--a" : "--b").trim();
+const base = m => m.url.trim().replace(/\/+$/, "").replace(/\/(health|info|metrics|docs|anonymize)$/, "");
+
+function renderMachines() {
+  $("#machines").innerHTML = machines.map(m => `
+    <div class="machine" style="--c: var(--${m.id.toLowerCase()})" data-m="${m.id}">
+      <div class="head"><span class="dot" data-dot></span><strong>Istanza ${m.id}</strong></div>
+      <div class="row">
+        <label class="f" style="flex:1">Nome<input type="text" data-k="name" value="${esc(m.name)}"></label>
+        <label class="f" style="flex:2">URL base<input type="url" data-k="url" value="${esc(m.url)}"></label>
+      </div>
+      <dl class="kv" data-kv><dt>stato</dt><dd>—</dd></dl>
+    </div>`).join("");
+  $$("#machines [data-k]").forEach(inp => inp.onchange = () => {
+    const m = machines.find(x => x.id === inp.closest("[data-m]").dataset.m);
+    m[inp.dataset.k] = inp.value;
+    store.set("machines", machines.map(({ id, name, url }) => ({ id, name, url })));
+    if (inp.dataset.k === "url") checkMachine(m);
+  });
+}
+
+function setMachineStatus(m, cls, rows) {
+  const el = $(`[data-m="${m.id}"]`);
+  $("[data-dot]", el).className = "dot " + cls;
+  $("[data-kv]", el).innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(String(v))}</dd>`).join("");
+}
+
+async function fetchJson(url, opts = {}, timeout = 15000) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeout);
+  try {
+    const r = await fetch(url, { cache: "no-store", ...opts, signal: opts.signal || ctl.signal });
+    const body = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${body ? (body.message || body.detail || JSON.stringify(body)) : r.statusText}`);
+    return body;
+  } finally { clearTimeout(t); }
+}
+
+async function checkMachine(m) {
+  setMachineStatus(m, "busy", [["stato", "verifica…"]]);
+  try {
+    const t0 = performance.now();
+    const h = await fetchJson(base(m) + "/health", {}, 5000);
+    const rtt = performance.now() - t0;
+    const info = await fetchJson(base(m) + "/info", {}, 5000);
+    let met = null;
+    try { met = await fetchJson(base(m) + "/metrics", {}, 5000); } catch {}
+    m.health = h; m.info = info;
+    const cfg = info.configuration || {};
+    setMachineStatus(m, h.status === "healthy" ? "ok" : "err", [
+      ["stato", `${h.status} (v${h.version})`],
+      ["/health", fmt(rtt) + " ms"],
+      ["lingue", (cfg.supported_languages || []).join(", ")],
+      ["default", cfg.default_language ?? "—"],
+      ["max testo", cfg.max_text_length ?? "—"],
+      ...(cfg.spacy_models ? [["modelli", Object.entries(cfg.spacy_models).map(([k, v]) => k + ":" + v).join(", ")]] : []),
+      ...(met ? [
+        ["memoria proc.", fmt(met.process.memory_mb) + " MB"],
+        ["RAM sistema", fmt(met.system.memory_percent) + " %"],
+        ["uptime", fmtDur(met.application.uptime_seconds)],
+      ] : []),
+    ]);
+  } catch (e) {
+    m.health = null;
+    setMachineStatus(m, "err", [["errore", e.name === "AbortError" ? "timeout" : e.message]]);
+  }
+  syncFromInfo();
+}
+
+function syncFromInfo() {
+  const infos = machines.map(m => m.info).filter(Boolean);
+  const maxes = infos.map(i => i.configuration?.max_text_length).filter(Boolean);
+  const chunk = $("#chunkSize");
+  if (maxes.length && !chunk.dataset.touched) chunk.value = Math.min(...maxes);
+  if (!chunk.value) chunk.value = 10000;
+  // Entity checkboxes: union of the entities advertised by the instances
+  const ents = new Set(DEFAULT_ENTITIES);
+  infos.forEach(i => {
+    (i.supported_entities || []).forEach(e => ents.add(e));
+    Object.values(i.supported_entities_by_language || {}).flat().forEach(e => ents.add(e));
+  });
+  const checked = new Set($$("#entities input:checked").map(i => i.value));
+  $("#entities").innerHTML = [...ents].sort().map(e =>
+    `<label><input type="checkbox" value="${e}" ${checked.has(e) ? "checked" : ""}> ${e}</label>`).join("");
+  // Languages
+  const langs = new Set();
+  infos.forEach(i => (i.configuration?.supported_languages || []).forEach(l => langs.add(l)));
+  if (langs.size) {
+    const sel = $("#language"), cur = sel.value;
+    sel.innerHTML = [...langs].map(l => `<option>${l}</option>`).join("");
+    sel.value = langs.has(cur) ? cur : [...langs][0];
+  }
+}
+$("#chunkSize").oninput = e => e.target.dataset.touched = "1";
+
+const DEFAULT_ENTITIES = ["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", "IBAN_CODE", "IP_ADDRESS",
+  "DATE_TIME", "LOCATION", "ORGANIZATION", "URL", "IT_FISCAL_CODE", "IT_VAT_CODE", "IT_IDENTITY_CARD",
+  "IT_DRIVER_LICENSE", "IT_PASSPORT", "IT_POSTAL_CODE"];
+
+$("#checkBtn").onclick = () => machines.forEach(checkMachine);
+
+$("#rttBtn").onclick = async () => {
+  const btn = $("#rttBtn"); btn.disabled = true;
+  $("#rttOut").textContent = "misura in corso…";
+  const out = [];
+  for (const m of machines) {
+    const ts = [];
+    for (let i = 0; i < 20; i++) {
+      const t0 = performance.now();
+      try { await fetchJson(base(m) + "/health", {}, 5000); ts.push(performance.now() - t0); } catch {}
+    }
+    const s = stats(ts.slice(2)); // drop the first two (connection setup)
+    out.push(`${m.id} (${m.name}): mediana ${fmt(s.p50)} ms, min ${fmt(s.min)}, p95 ${fmt(s.p95)}`);
+  }
+  $("#rttOut").textContent = out.join("  ·  ");
+  btn.disabled = false;
+};
+
+// ---------- input ----------
+const SAMPLES = {
+  it: `Gentile Dott. Mario Rossi,
+le confermiamo l'appuntamento del 15 marzo 2025 alle 10:30 presso la nostra sede in Via Giuseppe Garibaldi 12, 20121 Milano.
+Per qualsiasi necessità può contattare la sig.ra Giulia Bianchi al numero +39 347 123 4567 oppure scrivere a giulia.bianchi@example.it.
+Codice fiscale del paziente: RSSMRA80A01H501U. Partita IVA dello studio: 01234567890.
+Il pagamento può essere effettuato tramite bonifico sull'IBAN IT60X0542811101000000123456.
+Documento di identità: carta d'identità n. CA12345AB, rilasciata dal Comune di Roma.
+Cordiali saluti,
+Studio Medico Verdi — www.studioverdi.example.it`,
+  en: `Dear John Smith,
+your appointment is confirmed for March 15, 2025 at 10:30 AM at 221B Baker Street, London.
+For any questions please call Sarah Johnson at +1 (212) 555-0147 or email sarah.johnson@example.com.
+Your card ending 4111 1111 1111 1111 will be charged. Our server IP is 192.168.10.25.
+SSN on file: 078-05-1120. Visit https://www.example.com/patients for details.
+Best regards,
+Acme Health Clinic`,
+};
+$$("[data-sample]").forEach(b => b.onclick = () => {
+  $("#text").value = SAMPLES[b.dataset.sample];
+  if ([...$("#language").options].some(o => o.value === b.dataset.sample)) $("#language").value = b.dataset.sample;
+  updateTextLen();
+});
+$("#growBtn").onclick = () => {
+  const src = $("#text").value.trim() || SAMPLES[$("#language").value] || SAMPLES.it;
+  const target = +$("#growTo").value || 5000;
+  let out = src;
+  while (out.length + src.length + 2 <= target) out += "\n\n" + src;
+  $("#text").value = out;
+  updateTextLen();
+};
+const updateTextLen = () => $("#textLen").textContent = $("#text").value.length.toLocaleString("it-IT") + " caratteri";
+$("#text").oninput = updateTextLen;
+
+let activeTab = "text";
+$$("[data-tab]").forEach(b => b.onclick = () => {
+  activeTab = b.dataset.tab;
+  $$("[data-tab]").forEach(x => x.setAttribute("aria-selected", x === b));
+  $("#tab-text").classList.toggle("hidden", activeTab !== "text");
+  $("#tab-file").classList.toggle("hidden", activeTab !== "file");
+});
+
+let fileState = null; // { name, size, text }
+const drop = $("#drop");
+drop.onclick = () => $("#file").click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); };
+$("#file").onchange = e => e.target.files[0] && loadFile(e.target.files[0]);
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error("impossibile caricare " + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function extractText(file) {
+  const ext = file.name.split(".").pop().toLowerCase();
+  if (ext === "pdf") {
+    if (!window.pdfjsLib) {
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    }
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const c = await (await pdf.getPage(i)).getTextContent();
+      pages.push(c.items.map(it => it.str + (it.hasEOL ? "\n" : "")).join(""));
+    }
+    return pages.join("\n\n");
+  }
+  if (ext === "docx") {
+    if (!window.mammoth) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js");
+    return (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value;
+  }
+  return file.text();
+}
+
+async function loadFile(file) {
+  $("#fileInfo").textContent = "lettura di " + file.name + "…";
+  try {
+    const t0 = performance.now();
+    const text = await extractText(file);
+    fileState = { name: file.name, size: file.size, text };
+    const n = chunkText(text, chunkLimit()).length;
+    $("#fileInfo").innerHTML = `<strong>${esc(file.name)}</strong> — ${fmtBytes(file.size)}, ${text.length.toLocaleString("it-IT")} caratteri estratti in ${fmt(performance.now() - t0)} ms → ${n} richiest${n === 1 ? "a" : "e"} per istanza`;
+  } catch (e) {
+    fileState = null;
+    $("#fileInfo").innerHTML = `<span class="err">Errore: ${esc(e.message)}</span>`;
+  }
+}
+
+const chunkLimit = () => Math.max(100, +$("#chunkSize").value || 10000);
+
+// Split on paragraph, line or word boundaries so no chunk exceeds `max`.
+function chunkText(text, max) {
+  const chunks = [];
+  let rest = text;
+  while (rest.length > max) {
+    const win = rest.slice(0, max);
+    let cut = Math.max(win.lastIndexOf("\n\n"), win.lastIndexOf("\n"));
+    if (cut < max * 0.5) cut = win.lastIndexOf(" ");
+    if (cut < max * 0.5) cut = max;
+    else cut += 1;
+    chunks.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  if (rest.length) chunks.push(rest);
+  return chunks.filter(c => c.trim().length);
+}
+
+function currentInput() {
+  const text = activeTab === "file" ? fileState?.text : $("#text").value;
+  if (!text || !text.trim()) throw new Error(activeTab === "file" ? "Nessun file caricato." : "Il testo è vuoto.");
+  return { text, chunks: chunkText(text, chunkLimit()), source: activeTab === "file" ? fileState.name : "testo" };
+}
+
+function buildBody(text) {
+  const body = { text, language: $("#language").value };
+  const strategy = $("#strategy").value;
+  const ents = $$("#entities input:checked").map(i => i.value);
+  const th = $("#threshold").value;
+  if (strategy || ents.length || th !== "") {
+    const c = {};
+    if (strategy) c.strategy = strategy;
+    if (strategy === "replace" && $("#replacement").value) c.replacement_text = $("#replacement").value;
+    if (ents.length) c.entities_to_anonymize = ents;
+    if (th !== "") c.score_threshold = +th;
+    body.config = c;
+  }
+  return body;
+}
+
+// ---------- one request ----------
+async function anonymize(m, text, signal) {
+  const t0 = performance.now();
+  const rec = { machine: m.id, chars: text.length, start: t0 };
+  try {
+    const r = await fetch(base(m) + "/anonymize", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildBody(text)), signal, cache: "no-store",
+    });
+    rec.ttfb = performance.now() - t0;
+    const j = await r.json().catch(() => null);
+    rec.client = performance.now() - t0;
+    rec.status = r.status;
+    if (!r.ok) {
+      rec.error = j ? (j.message || (typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail || j))) : r.statusText;
+    } else {
+      rec.server = j.processing_time_ms;
+      rec.overhead = rec.client - rec.server;
+      rec.entities = j.detected_entities.length;
+      rec.response = j;
+    }
+  } catch (e) {
+    rec.client = performance.now() - t0;
+    rec.status = 0;
+    rec.error = e.name === "AbortError" ? "interrotta" : (e.message || "errore di rete");
+  }
+  rec.end = performance.now();
+  return rec;
+}
+
+// ---------- single test ----------
+$("#singleBtn").onclick = async () => {
+  let input;
+  try { input = currentInput(); } catch (e) { return alert(e.message); }
+  const btn = $("#singleBtn"); btn.disabled = true;
+  $("#singlePanel").classList.remove("hidden");
+  $("#singleVerdict").textContent = `Invio di ${input.chunks.length} richiest${input.chunks.length === 1 ? "a" : "e"} a ciascuna istanza (in parallelo)…`;
+  $("#singleResults").innerHTML = "";
+
+  const results = await Promise.all(machines.map(async m => {
+    const t0 = performance.now();
+    const recs = [];
+    for (const c of input.chunks) recs.push(await anonymize(m, c));
+    return { m, recs, wall: performance.now() - t0 };
+  }));
+
+  $("#singleResults").innerHTML = results.map(({ m, recs, wall }) => {
+    const errs = recs.filter(r => r.error);
+    const ok = recs.filter(r => !r.error);
+    const server = sum(ok.map(r => r.server));
+    const client = sum(recs.map(r => r.client));
+    const anonText = recs.map(r => r.response ? r.response.anonymized_text : `[[ERRORE: ${r.error}]]`).join("");
+    const ents = [];
+    let offset = 0;
+    recs.forEach((r, i) => {
+      (r.response?.detected_entities || []).forEach(e =>
+        ents.push({ ...e, value: input.chunks[i].slice(e.start, e.end), start: e.start + offset }));
+      offset += input.chunks[i].length;
+    });
+    const byType = {};
+    ents.forEach(e => byType[e.entity_type] = (byType[e.entity_type] || 0) + 1);
+    return `<div class="machine" style="--c: var(--${m.id.toLowerCase()})">
+      <h3>Istanza ${m.id} — ${esc(m.name)}</h3>
+      <div class="tiles">
+        ${tile("Tempo totale", fmt(wall) + " ms")}
+        ${tile("Server", fmt(server) + " ms")}
+        ${tile("Overhead", fmt(client - server) + " ms")}
+        ${tile("Entità", ents.length)}
+        ${tile("Richieste", recs.length + (errs.length ? ` (${errs.length} err)` : ""))}
+        ${tile("Throughput", fmt(input.text.length / (wall / 1000), 0) + " car/s")}
+      </div>
+      ${errs.length ? `<p class="err">${esc(errs[0].error)}</p>` : ""}
+      <div class="out" data-out="${m.id}">${highlight(anonText)}</div>
+      <div class="row" style="margin:8px 0">
+        <button data-dl="${m.id}">Scarica testo anonimizzato</button>
+      </div>
+      <details><summary>Entità rilevate (${ents.length}) — ${Object.entries(byType).map(([k, v]) => k + " " + v).join(", ") || "nessuna"}</summary>
+        <div class="tablewrap"><table><tr><th>Tipo</th><th style="text-align:left">Valore originale</th><th>Pos.</th><th>Score</th></tr>
+        ${ents.map(e => `<tr><td>${e.entity_type}</td><td style="text-align:left;font-family:var(--mono)">${esc(e.value)}</td><td>${e.start}</td><td>${e.score.toFixed(2)}</td></tr>`).join("")}
+        </table></div>
+      </details>
+    </div>`;
+  }).join("");
+
+  const texts = results.map(r => r.recs.map(x => x.response?.anonymized_text ?? "").join(""));
+  results.forEach((r, i) => {
+    $(`[data-dl="${r.m.id}"]`).onclick = () => {
+      const name = (input.source === "testo" ? "testo" : input.source.replace(/\.[^.]+$/, "")) + `.anonimizzato.${r.m.id}.txt`;
+      download(name, texts[i], "text/plain");
+    };
+  });
+  const [a, b] = results;
+  const failed = results.filter(r => r.recs.some(x => x.error));
+  if (failed.length) {
+    $("#singleVerdict").innerHTML = `<span class="err">Errori su ${failed.map(r => r.m.id + " (" + esc(r.m.name) + "): " + esc(r.recs.find(x => x.error).error)).join("; ")}</span>`;
+    btn.disabled = false;
+    return;
+  }
+  const faster = a.wall <= b.wall ? a : b, slower = faster === a ? b : a;
+  $("#singleVerdict").innerHTML = `<strong>${faster.m.id} (${esc(faster.m.name)})</strong> più veloce di ${fmt(slower.wall / faster.wall, 2)}× su questa singola esecuzione (${fmt(faster.wall)} vs ${fmt(slower.wall)} ms). `
+    + (texts[0] === texts[1] ? "Output identici." : `<span class="err">Output diversi tra le due istanze</span> (possibili versioni/modelli differenti o hash con salt casuale).`)
+    + ` <span class="muted">Una singola misura è rumorosa: usa il benchmark per un confronto affidabile.</span>`;
+  btn.disabled = false;
+};
+
+// ---------- benchmark ----------
+let bench = null; // last run
+let abortCtl = null;
+
+$("#stopBtn").onclick = () => abortCtl && abortCtl.abort();
+
+$("#benchBtn").onclick = async () => {
+  let input;
+  try { input = currentInput(); } catch (e) { return alert(e.message); }
+  const iters = Math.max(1, +$("#iters").value || 1);
+  const warm = Math.max(0, +$("#warmup").value || 0);
+  const conc = Math.max(1, Math.min(64, +$("#conc").value || 1));
+  const order = $("#order").value;
+  const pause = Math.max(0, +$("#pause").value || 0);
+
+  // One task per (iteration, chunk). Warm-up iterations come first and are excluded from stats.
+  const tasks = [];
+  for (let it = 0; it < warm + iters; it++)
+    input.chunks.forEach((c, ci) => tasks.push({ iter: it, chunk: ci, text: c, warmup: it < warm }));
+
+  abortCtl = new AbortController();
+  const signal = abortCtl.signal;
+  const total = tasks.length * machines.length;
+  let done = 0;
+  const progress = () => {
+    $("#prog").style.width = (100 * done / total) + "%";
+    $("#progText").textContent = `${done} / ${total} richieste`;
+  };
+  $("#benchBtn").disabled = $("#singleBtn").disabled = true;
+  $("#stopBtn").classList.remove("hidden");
+  progress();
+
+  const records = { A: [], B: [] };
+  const phases = { A: {}, B: {} };
+  const tRun0 = performance.now();
+
+  // Resource monitoring
+  const samples = { A: [], B: [] };
+  const metricsBefore = {}, metricsAfter = {};
+  await Promise.all(machines.map(async m => { try { metricsBefore[m.id] = await fetchJson(base(m) + "/metrics", {}, 3000); } catch {} }));
+  let monTimer = null;
+  if ($("#monitor").checked) {
+    const tick = () => machines.forEach(async m => {
+      try {
+        const x = await fetchJson(base(m) + "/metrics", {}, 3000);
+        samples[m.id].push({ t: performance.now() - tRun0, cpu: x.system.cpu_percent, mem: x.process.memory_mb, sysmem: x.system.memory_percent });
+      } catch {}
+    });
+    tick();
+    monTimer = setInterval(tick, 1000);
+  }
+
+  // Runs `list` against machine m with a pool of `conc` workers.
+  async function runPool(m, list) {
+    const ph = phases[m.id];
+    let idx = 0;
+    const worker = async () => {
+      while (idx < list.length && !signal.aborted) {
+        const task = list[idx++];
+        const r = await anonymize(m, task.text, signal);
+        Object.assign(r, { iter: task.iter, chunk: task.chunk, warmup: task.warmup, t: r.start - tRun0 });
+        delete r.response;
+        records[m.id].push(r);
+        if (!task.warmup) {
+          ph.measStart = Math.min(ph.measStart ?? Infinity, r.start);
+          ph.measEnd = Math.max(ph.measEnd ?? 0, r.end);
+        }
+        done++; progress();
+        if (pause) await sleep(pause);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(conc, list.length) }, worker));
+  }
+
+  const [A, B] = machines;
+  try {
+    if (order === "sequential") {
+      await runPool(A, tasks); await runPool(B, tasks);
+    } else if (order === "parallel") {
+      await Promise.all([runPool(A, tasks), runPool(B, tasks)]);
+    } else {
+      // Alternate in batches of `conc` requests so both instances see the same conditions over time
+      for (let i = 0; i < tasks.length && !signal.aborted; i += conc) {
+        const batch = tasks.slice(i, i + conc);
+        const first = (i / conc) % 2 === 0 ? [A, B] : [B, A];
+        await runPool(first[0], batch);
+        await runPool(first[1], batch);
+      }
+    }
+  } finally {
+    clearInterval(monTimer);
+  }
+  await Promise.all(machines.map(async m => { try { metricsAfter[m.id] = await fetchJson(base(m) + "/metrics", {}, 3000); } catch {} }));
+
+  bench = {
+    when: new Date().toISOString(),
+    params: { iterations: iters, warmup: warm, concurrency: conc, order, pause_ms: pause, source: input.source,
+      total_chars: input.text.length, chunks: input.chunks.length, chunk_limit: chunkLimit(), request: { ...buildBody("…") } },
+    machines: machines.map(m => ({ id: m.id, name: m.name, url: base(m),
+      version: m.health?.version, config: m.info?.configuration })),
+    aborted: signal.aborted,
+    records, samples, metricsBefore, metricsAfter,
+    stats: {},
+  };
+  for (const m of machines) bench.stats[m.id] = summarize(records[m.id], phases[m.id], samples[m.id], input, order);
+  renderBench();
+
+  $("#benchBtn").disabled = $("#singleBtn").disabled = false;
+  $("#stopBtn").classList.add("hidden");
+  $("#progText").textContent = signal.aborted ? `Interrotto dopo ${done} / ${total} richieste` : `Completato: ${total} richieste in ${fmt((performance.now() - tRun0) / 1000, 1)} s`;
+  abortCtl = null;
+};
+
+function summarize(recs, ph, samples, input, order) {
+  const meas = recs.filter(r => !r.warmup);
+  const ok = meas.filter(r => !r.error);
+  const cl = stats(ok.map(r => r.client));
+  const sv = stats(ok.map(r => r.server));
+  const ov = stats(ok.map(r => r.overhead));
+  const tt = stats(ok.map(r => r.ttfb));
+  // Per-document time: sum of chunk latencies per iteration (equals wall time with concurrency 1)
+  const perIter = {};
+  ok.forEach(r => perIter[r.iter] = (perIter[r.iter] || 0) + r.client);
+  const full = Object.entries(perIter).filter(([it]) =>
+    ok.filter(r => r.iter == it).length === input.chunks.length).map(([, v]) => v);
+  // Throughput: in alternate mode the wall clock includes the other instance's turns, so use busy time
+  const wallS = order === "alternate" ? sum(ok.map(r => r.client)) / 1000 / Math.max(1, +$("#conc").value)
+    : ((ph.measEnd ?? 0) - (ph.measStart ?? 0)) / 1000;
+  const chars = sum(ok.map(r => r.chars));
+  const cpu = stats(samples.map(s => s.cpu));
+  const mem = stats(samples.map(s => s.mem));
+  return {
+    n: meas.length, ok: ok.length, errors: meas.length - ok.length,
+    errorSample: meas.find(r => r.error)?.error,
+    client: cl, server: sv, overhead: ov, ttfb: tt, doc: stats(full),
+    rps: wallS > 0 ? ok.length / wallS : NaN,
+    charsPerS: wallS > 0 ? chars / wallS : NaN,
+    msPer1kChars: sv.mean / (chars / ok.length / 1000),
+    entities: ok.length ? sum(ok.map(r => r.entities)) / ok.length : NaN,
+    cpuAvg: cpu.mean, cpuMax: cpu.max, memAvg: mem.mean, memMax: mem.max,
+  };
+}
+
+function renderBench() {
+  $("#benchPanel").classList.remove("hidden");
+  const [A, B] = machines;
+  const sa = bench.stats.A, sb = bench.stats.B;
+  const rows = [
+    ["Richieste misurate (ok / err)", s => `${s.ok} / ${s.errors}`, null],
+    ["Latenza client — media", s => s.client.mean, "low"],
+    ["Latenza client — mediana (p50)", s => s.client.p50, "low"],
+    ["Latenza client — p90", s => s.client.p90, "low"],
+    ["Latenza client — p95", s => s.client.p95, "low"],
+    ["Latenza client — p99", s => s.client.p99, "low"],
+    ["Latenza client — min", s => s.client.min, "low"],
+    ["Latenza client — max", s => s.client.max, "low"],
+    ["Latenza client — dev. std", s => s.client.sd, "low"],
+    ["Coeff. di variazione (%)", s => 100 * s.client.sd / s.client.mean, "low"],
+    ["Tempo al primo byte — mediana", s => s.ttfb.p50, "low"],
+    ["Server processing — media", s => s.server.mean, "low"],
+    ["Server processing — mediana", s => s.server.p50, "low"],
+    ["Server processing — p95", s => s.server.p95, "low"],
+    ["Overhead rete/coda — mediana", s => s.overhead.p50, "low"],
+    ["Server ms per 1.000 caratteri", s => s.msPer1kChars, "low"],
+    ...(bench.params.chunks > 1 ? [["Documento completo — mediana", s => s.doc.p50, "low"]] : []),
+    ["Throughput (richieste/s)", s => s.rps, "high"],
+    ["Throughput (caratteri/s)", s => s.charsPerS, "high"],
+    ["Entità medie per richiesta", s => s.entities, null],
+    ["CPU sistema — media (%)", s => s.cpuAvg, null],
+    ["CPU sistema — picco (%)", s => s.cpuMax, null],
+    ["Memoria processo — picco (MB)", s => s.memMax, null],
+  ];
+  const num = v => typeof v === "number" && isFinite(v);
+  $("#cmpTable").innerHTML = `<tr><th>Metrica (ms salvo diversa indicazione)</th>
+      <th style="color:var(--a)">A — ${esc(A.name)}</th><th style="color:var(--b)">B — ${esc(B.name)}</th><th>B vs A</th></tr>`
+    + rows.map(([label, f, better]) => {
+      const va = f(sa), vb = f(sb);
+      let ca = "", cb = "", delta = "";
+      if (num(va) && num(vb)) {
+        if (va !== 0) { const d = 100 * (vb - va) / va; delta = (d > 0 ? "+" : "") + fmt(d, 1) + "%"; }
+        if (better && va !== vb) {
+          const aWins = better === "low" ? va < vb : va > vb;
+          ca = aWins ? "win" : ""; cb = aWins ? "" : "win";
+        }
+      }
+      const show = v => num(v) ? fmt(v) : (v ?? "—");
+      return `<tr><td>${label}</td><td class="${ca}">${show(va)}</td><td class="${cb}">${show(vb)}</td><td>${delta}</td></tr>`;
+    }).join("");
+
+  // Verdict based on server-side median (pure compute) and client median (what users see)
+  const parts = [];
+  if (sa.ok && sb.ok) {
+    const sr = sa.server.p50 / sb.server.p50, cr = sa.client.p50 / sb.client.p50;
+    const who = (r) => r >= 1 ? ["B", B.name, r] : ["A", A.name, 1 / r];
+    const [sid, sname, sx] = who(sr), [cid, cname, cx] = who(cr);
+    parts.push(`Elaborazione server: <strong>${sid} (${esc(sname)})</strong> più veloce di <strong>${fmt(sx, 2)}×</strong> (mediana ${fmt(sa.server.p50)} vs ${fmt(sb.server.p50)} ms).`);
+    parts.push(`Latenza percepita: <strong>${cid} (${esc(cname)})</strong> più veloce di <strong>${fmt(cx, 2)}×</strong> (mediana ${fmt(sa.client.p50)} vs ${fmt(sb.client.p50)} ms).`);
+    const mw = mannWhitney(ok(bench.records.A).map(r => r.server), ok(bench.records.B).map(r => r.server));
+    if (isFinite(mw.p)) parts.push(`<span class="muted">Test di Mann-Whitney sui tempi server: p ≈ ${mw.p < 0.001 ? "&lt; 0,001" : fmt(mw.p, 3)} — ${mw.p < 0.05 ? "differenza statisticamente significativa" : "differenza non significativa, aumenta le iterazioni"}.</span>`);
+  }
+  if (sa.errors || sb.errors) parts.push(`<span class="err">Errori: A ${sa.errors}, B ${sb.errors}${(sa.errorSample || sb.errorSample) ? " — es. " + esc(sa.errorSample || sb.errorSample) : ""}</span>`);
+  if (bench.aborted) parts.push(`<span class="err">Benchmark interrotto: risultati parziali.</span>`);
+  parts.push(`<span class="muted">${bench.params.iterations} iterazioni + ${bench.params.warmup} warm-up, concorrenza ${bench.params.concurrency}, ordine ${bench.params.order}, ${bench.params.total_chars.toLocaleString("it-IT")} caratteri in ${bench.params.chunks} blocc${bench.params.chunks === 1 ? "o" : "hi"}.</span>`);
+  $("#benchVerdict").innerHTML = parts.join("<br>");
+  redrawCharts();
+}
+const ok = recs => recs.filter(r => !r.warmup && !r.error);
+
+// ---------- charts (plain canvas, no dependencies) ----------
+function redrawCharts() {
+  $$("[data-legend]").forEach(l => l.innerHTML = machines.map(m =>
+    `<span><i style="background:${color(m.id)}"></i>${m.id} — ${esc(m.name)}</span>`).join(""));
+  if (!bench) return;
+  const series = machines.map(m => ({ id: m.id, recs: ok(bench.records[m.id]) }));
+  // latency per request
+  lineChart($("#chLatency"), series.map(s => ({ id: s.id, pts: s.recs.map((r, i) => [i + 1, r.client]) })), "richiesta #");
+  // histogram
+  const all = series.flatMap(s => s.recs.map(r => r.client));
+  if (all.length) {
+    const lo = Math.min(...all), hi = Math.max(...all);
+    const bins = Math.min(30, Math.max(8, Math.ceil(Math.sqrt(all.length))));
+    const w = (hi - lo) / bins || 1;
+    const hist = series.map(s => {
+      const h = new Array(bins).fill(0);
+      s.recs.forEach(r => h[Math.min(bins - 1, Math.floor((r.client - lo) / w))]++);
+      return { id: s.id, h };
+    });
+    barChart($("#chHist"), hist, bins, i => fmt(lo + i * w, 0));
+  }
+  // percentile curve
+  const ps = [0, 10, 25, 50, 75, 90, 95, 99, 100];
+  lineChart($("#chPct"), series.map(s => {
+    const sorted = s.recs.map(r => r.client).sort((a, b) => a - b);
+    return { id: s.id, pts: ps.map(p => [p, pct(sorted, p)]) };
+  }), "percentile", [0, 25, 50, 75, 90, 99]);
+  // cpu
+  lineChart($("#chCpu"), machines.map(m => ({ id: m.id, pts: bench.samples[m.id].map(s => [s.t / 1000, s.cpu]) })), "secondi", null, [0, 100]);
+}
+
+function setupCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const cs = getComputedStyle(document.documentElement);
+  ctx.font = "11px system-ui, sans-serif";
+  return { ctx, w, h, muted: cs.getPropertyValue("--muted").trim(), grid: cs.getPropertyValue("--border").trim() };
+}
+
+function axes(c, pad, yMin, yMax, xLabels, xTitle) {
+  const { ctx, w, h, muted, grid } = c;
+  ctx.strokeStyle = grid; ctx.fillStyle = muted; ctx.lineWidth = 1;
+  const ticks = niceTicks(yMin, yMax, 5);
+  ticks.forEach(t => {
+    const y = pad.t + (h - pad.t - pad.b) * (1 - (t - yMin) / (yMax - yMin || 1));
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
+    ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(fmtTick(t), pad.l - 6, y);
+  });
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  xLabels.forEach(([x, label]) => ctx.fillText(label, x, h - pad.b + 5));
+  if (xTitle) { ctx.textAlign = "right"; ctx.fillText(xTitle, w - pad.r, h - 14); }
+}
+
+function lineChart(cv, series, xTitle, xTicks, yRange) {
+  const c = setupCanvas(cv), { ctx, w, h } = c;
+  const pad = { l: 44, r: 10, t: 8, b: 34 };
+  const pts = series.flatMap(s => s.pts);
+  if (!pts.length) { ctx.fillStyle = c.muted; ctx.fillText("nessun dato", 12, 20); return; }
+  const xMin = Math.min(...pts.map(p => p[0])), xMax = Math.max(...pts.map(p => p[0]));
+  let [yMin, yMax] = yRange || [0, Math.max(...pts.map(p => p[1])) * 1.08];
+  const X = x => pad.l + (w - pad.l - pad.r) * ((x - xMin) / (xMax - xMin || 1));
+  const Y = y => pad.t + (h - pad.t - pad.b) * (1 - (y - yMin) / (yMax - yMin || 1));
+  const xt = xTicks || niceTicks(xMin, xMax, 6);
+  axes(c, pad, yMin, yMax, xt.filter(t => t >= xMin && t <= xMax).map(t => [X(t), fmtTick(t)]), xTitle);
+  series.forEach(s => {
+    ctx.strokeStyle = color(s.id); ctx.fillStyle = color(s.id); ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    s.pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)));
+    ctx.stroke();
+    if (s.pts.length <= 60) s.pts.forEach(([x, y]) => { ctx.beginPath(); ctx.arc(X(x), Y(y), 2.2, 0, 7); ctx.fill(); });
+  });
+}
+
+function barChart(cv, hist, bins, label) {
+  const c = setupCanvas(cv), { ctx, w, h } = c;
+  const pad = { l: 44, r: 10, t: 8, b: 34 };
+  const yMax = Math.max(1, ...hist.flatMap(s => s.h)) * 1.1;
+  const bw = (w - pad.l - pad.r) / bins;
+  const step = Math.ceil(bins / 6);
+  const xl = [];
+  for (let i = 0; i <= bins; i += step) xl.push([pad.l + i * bw, label(i)]);
+  axes(c, pad, 0, yMax, xl, "ms");
+  hist.forEach((s, k) => {
+    ctx.fillStyle = color(s.id);
+    s.h.forEach((v, i) => {
+      if (!v) return;
+      const x = pad.l + i * bw + 1 + k * (bw - 2) / hist.length;
+      const y = pad.t + (h - pad.t - pad.b) * (1 - v / yMax);
+      ctx.fillRect(x, y, Math.max(1, (bw - 2) / hist.length - 1), h - pad.b - y);
+    });
+  });
+}
+
+function niceTicks(lo, hi, n) {
+  if (hi <= lo) return [lo];
+  const raw = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => s >= raw);
+  const out = [];
+  for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) out.push(+t.toFixed(10));
+  return out;
+}
+const fmtTick = t => Math.abs(t) >= 1000 ? (t / 1000).toFixed(1) + "k" : (Number.isInteger(t) ? t : +t.toPrecision(3));
+let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(redrawCharts, 150); });
+
+// ---------- export ----------
+$("#csvBtn").onclick = () => {
+  if (!bench) return;
+  const cols = ["machine", "name", "iter", "chunk", "warmup", "t_ms", "chars", "status", "client_ms", "ttfb_ms", "server_ms", "overhead_ms", "entities", "error"];
+  const lines = [cols.join(",")];
+  machines.forEach(m => bench.records[m.id].forEach(r => lines.push([
+    m.id, m.name, r.iter, r.chunk, r.warmup, r.t?.toFixed(1), r.chars, r.status, r.client?.toFixed(2), r.ttfb?.toFixed(2),
+    r.server?.toFixed(2), r.overhead?.toFixed(2), r.entities ?? "", r.error ?? "",
+  ].map(csvCell).join(","))));
+  download(`pii-bench-${stamp()}.csv`, lines.join("\n"), "text/csv");
+};
+$("#jsonBtn").onclick = () => bench && download(`pii-bench-${stamp()}.json`, JSON.stringify(bench, null, 2), "application/json");
+
+// ---------- utils ----------
+function stats(arr) {
+  const a = arr.filter(v => typeof v === "number" && isFinite(v)).sort((x, y) => x - y);
+  if (!a.length) return { n: 0, min: NaN, max: NaN, mean: NaN, sd: NaN, p50: NaN, p90: NaN, p95: NaN, p99: NaN };
+  const mean = sum(a) / a.length;
+  const sd = Math.sqrt(sum(a.map(v => (v - mean) ** 2)) / Math.max(1, a.length - 1));
+  return { n: a.length, min: a[0], max: a[a.length - 1], mean, sd,
+    p50: pct(a, 50), p90: pct(a, 90), p95: pct(a, 95), p99: pct(a, 99) };
+}
+function pct(sorted, p) {
+  if (!sorted.length) return NaN;
+  const i = (sorted.length - 1) * p / 100, lo = Math.floor(i), hi = Math.ceil(i);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+}
+// Two-sided Mann-Whitney U test (normal approximation with tie correction)
+function mannWhitney(x, y) {
+  const n1 = x.length, n2 = y.length;
+  if (n1 < 3 || n2 < 3) return { p: NaN };
+  const all = x.map(v => [v, 0]).concat(y.map(v => [v, 1])).sort((a, b) => a[0] - b[0]);
+  const ranks = new Array(all.length);
+  let tie = 0;
+  for (let i = 0; i < all.length;) {
+    let j = i; while (j + 1 < all.length && all[j + 1][0] === all[i][0]) j++;
+    const r = (i + j) / 2 + 1, t = j - i + 1;
+    for (let k = i; k <= j; k++) ranks[k] = r;
+    tie += t ** 3 - t; i = j + 1;
+  }
+  const r1 = sum(all.map((v, i) => v[1] === 0 ? ranks[i] : 0));
+  const u = r1 - n1 * (n1 + 1) / 2, n = n1 + n2;
+  const mu = n1 * n2 / 2, sigma = Math.sqrt(n1 * n2 / 12 * ((n + 1) - tie / (n * (n - 1))));
+  if (!sigma) return { p: 1 };
+  const z = (Math.abs(u - mu) - 0.5) / sigma;
+  return { p: Math.min(1, 2 * (1 - normCdf(z))) };
+}
+function normCdf(z) {
+  const t = 1 / (1 + 0.2316419 * z);
+  const d = 0.3989423 * Math.exp(-z * z / 2);
+  return 1 - d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+}
+const sum = a => a.reduce((s, v) => s + (v || 0), 0);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function fmt(v, d) {
+  if (typeof v !== "number" || !isFinite(v)) return "—";
+  if (d === undefined) d = Math.abs(v) >= 100 ? 0 : Math.abs(v) >= 10 ? 1 : 2;
+  return v.toLocaleString("it-IT", { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+const fmtBytes = b => b < 1024 ? b + " B" : b < 1048576 ? fmt(b / 1024, 1) + " KB" : fmt(b / 1048576, 1) + " MB";
+const fmtDur = s => s < 60 ? fmt(s, 0) + " s" : s < 3600 ? fmt(s / 60, 0) + " min" : fmt(s / 3600, 1) + " h";
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const tile = (l, v) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+// Highlight placeholders produced by the anonymizer: <TYPE>, <ANONYMIZED>, masks, hashes
+const highlight = t => esc(t).replace(/&lt;[A-Z_]+&gt;|\*{3,}|\b[0-9a-f]{64,128}\b/g, m => `<mark>${m}</mark>`);
+const csvCell = v => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+function download(name, content, type) {
+  const url = URL.createObjectURL(new Blob([content], { type: type + ";charset=utf-8" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ---------- init ----------
+renderMachines();
+syncFromInfo();
+$("#text").value = SAMPLES.it; updateTextLen();
+redrawCharts();
+machines.forEach(checkMachine);
+</script>
+</body>
+</html>
